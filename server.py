@@ -22,7 +22,6 @@ class Client(Protocol):
         self.factory.clients.append(self)
 
         print(f"Client connected: {self.ip}")
-
         self.transport.write("Welcome to the chat v0.1\n".encode())
 
     def dataReceived(self, data: bytes):
@@ -35,18 +34,33 @@ class Client(Protocol):
         if self.login is not None:
             server_message = f"{self.login}: {message}"
             self.factory.notify_all_users(server_message)
-
+            self.factory.history.append(server_message)
             print(server_message)
         else:
             if message.startswith("login:"):
-                self.login = message.replace("login:", "")
+                 new_login = message.replace("login:", "")
+                 if (self.check_online(new_login) == 'new'):
+                     self.login = new_login
+                     notification = f"New user connected: {self.login}"
+                     self.factory.notify_all_users(notification)
+                     print(notification)
+                     if len(self.factory.history) > 0:
+                         for stored_message in self.factory.history:
+                             self.transport.write(f"{stored_message}\n".encode())
 
-                notification = f"New user connected: {self.login}"
+                 else:
+                     print(f"Error: Losgin {new_login} alredy online")
+                     self.transport.write("exit\n".encode())
 
-                self.factory.notify_all_users(notification)
-                print(notification)
             else:
                 print("Error: Invalid client login")
+
+    def check_online(self, new_login):
+        for online_user in self.factory.clients:
+            if new_login == online_user.login:
+                return 'online'
+            else:
+                return 'new'
 
     def connectionLost(self, reason=None):
         """
@@ -59,12 +73,14 @@ class Client(Protocol):
 
 class Chat(Factory):
     clients: list
+    history: list
 
     def __init__(self):
         """
         Инициализация сервера
         """
         self.clients = []
+        self.history = []
         print("*" * 10, "\nStart server \nCompleted [OK]")
 
     def startFactory(self):
